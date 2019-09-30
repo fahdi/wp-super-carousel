@@ -1,0 +1,24 @@
+<div class="container">
+    <div class="columns">
+        <div class="column col-12">
+            <ul id="carousel-loop" class="carousel-loop clearfix">
+                ';
+                $sections = get_post_meta($post->ID, '_arti_carousels_editor', true);
+                $now = 0;
+                if (!empty($sections)) {
+                foreach ((array)$sections as $key => $item) {
+                $now++;
+                $item_title = esc_attr($item['title']);
+                $item_image = intval($item['image']);
+                $item_content = esc_html($item['content']);
+                $item_link_url = esc_html($item['link_url']);
+                $item_link_text = esc_html($item['link_text']);
+                $output .= arti_carousel_item($item_title, $item_image, $item_content, $item_link_url, $item_link_text);
+                }; //endforeach
+                };
+                $output .= '
+            </ul>
+            <a href="javascript:void(0)" name="addnew" class="button button-primary button-large" id="carousel-addnew"><i class="lni-add-file"></i> '.__(' Add New Item', 'arti-carousel').'</a>
+        </div>
+    </div>
+</div>
