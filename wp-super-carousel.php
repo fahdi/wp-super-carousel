@@ -5,14 +5,23 @@
  * Version:     0.1
  **/
 
-function arti_carousel_item( $item_title = '', $item_image = 0, $item_content = '', $item_link_url = '', $item_link_text = '', $item_link_target = '_parent' ) {
-	$img_src = $item_image > 0 ? wp_get_attachment_image( $item_image, 'medium' ) : '';
+function arti_carousel_item( $item_title = '', $item_image = 0, $item_content = '', $item_link_url = '', $item_link_text = '', $item_link_target = '_parent', $check_button_video = 'image', $item_video_youtube = '', $item_video_vimeo = '' ) {
+	$item_image = (int) $item_image;
+	$img_src    = $item_image > 0 ? wp_get_attachment_image( $item_image, 'medium' ) : '';
 	if ( $item_link_text == '' ) {
 		$item_link_text = __( 'Read more', 'arti-carousel' );
 	}
 	if ( $check_button_video == '' ) {
 		$check_button_video = 'image';
 	}
+	$item_title         = esc_attr( $item_title );
+	$item_content       = esc_textarea( $item_content );
+	$item_link_url      = esc_attr( $item_link_url );
+	$item_link_text     = esc_attr( $item_link_text );
+	$item_link_target   = esc_attr( $item_link_target );
+	$check_button_video = esc_attr( $check_button_video );
+	$item_video_youtube = esc_attr( $item_video_youtube );
+	$item_video_vimeo   = esc_attr( $item_video_vimeo );
 	$item_new = '
 				<li class="carousel-item clearfix open">
 				<div class="carousel-header">
@@ -74,7 +83,7 @@ function arti_carousel_form_script() {
       jQuery(document).ready(function($) {
 //add-item
         $('#carousel-addnew').click(function() {
-          $('#carousel-loop').append('<?php echo $item_new;?>');
+          $('#carousel-loop').append(<?php echo wp_json_encode( $item_new ); ?>);
           $('.selectmenu').each(function(event, ui) {
             $selectValue = $(this).parent().find('input').val();
             $(this).
@@ -88,7 +97,7 @@ function arti_carousel_form_script() {
           });
         });
 //remove-item
-        $('.carousel-header .remove').live('click', function() {
+        $(document).on('click', '.carousel-header .remove', function() {
           if (confirm('Are you sure?')) {
             $(this).
                 closest('.carousel-item').
@@ -146,47 +155,54 @@ function arti_carousel_save( $post_id ) {
 		return;
 	}
 	//Nonce-Field Check END
-	if ( 'arti_carousel' == $_POST['post_type'] ) {
-		if ( ! current_user_can( 'edit_page', $post_id ) || ! current_user_can( 'edit_post', $post_id ) ) {
-			return;
-		};
-	};
+	if ( 'arti_carousel' !== get_post_type( $post_id ) ) {
+		return;
+	}
+	if ( ! current_user_can( 'edit_post', $post_id ) ) {
+		return;
+	}
 	//Security END
 
 	//Get Editor Variables
-	$titles          = (array) $_POST['carousel_title'];
-	$images          = (array) $_POST['carousel_image'];
-	$contents        = (array) $_POST['carousel_content'];
-	$link_url        = (array) $_POST['carousel_link_url'];
-	$link_text       = (array) $_POST['carousel_link_text'];
-	$link_target     = (array) $_POST['carousel_link_target'];
+	$post_array = wp_unslash( $_POST );
+	$titles          = isset( $post_array['carousel_title'] ) ? (array) $post_array['carousel_title'] : [];
+	$images          = isset( $post_array['carousel_image'] ) ? (array) $post_array['carousel_image'] : [];
+	$contents        = isset( $post_array['carousel_content'] ) ? (array) $post_array['carousel_content'] : [];
+	$link_url        = isset( $post_array['carousel_link_url'] ) ? (array) $post_array['carousel_link_url'] : [];
+	$link_text       = isset( $post_array['carousel_link_text'] ) ? (array) $post_array['carousel_link_text'] : [];
+	$link_target     = isset( $post_array['carousel_link_target'] ) ? (array) $post_array['carousel_link_target'] : [];
 	$_arti_carousels = [];
 	foreach ( $titles as $key => $val ) {
+		$target            = isset( $link_target[ $key ] ) ? sanitize_text_field( $link_target[ $key ] ) : '_parent';
 		$_arti_carousels[] = [
-			'title'       => sanitize_text_field( $titles[ $key ] ),
-			'image'       => intval( $images[ $key ] ),
-			'content'     => sanitize_textarea_field( $contents[ $key ] ),
-			'link_url'    => sanitize_text_field( $link_url[ $key ] ),
-			'link_text'   => sanitize_text_field( $link_text[ $key ] ),
-			'link_target' => sanitize_text_field( $link_target[ $key ] ),
+			'title'       => sanitize_text_field( $val ),
+			'image'       => isset( $images[ $key ] ) ? intval( $images[ $key ] ) : 0,
+			'content'     => isset( $contents[ $key ] ) ? sanitize_textarea_field( $contents[ $key ] ) : '',
+			'link_url'    => isset( $link_url[ $key ] ) ? esc_url_raw( $link_url[ $key ] ) : '',
+			'link_text'   => isset( $link_text[ $key ] ) ? sanitize_text_field( $link_text[ $key ] ) : '',
+			'link_target' => in_array( $target, [ '_parent', '_blank' ], true ) ? $target : '_parent',
 		];
 	};
 
-	//Fields - Basic Settings
-	include( 'metabox-save/fields-basic-setings.php' );
-	//Fields - Formattings
-	include( 'metabox-save/fields-formattings.php' );
-	//Fields - Expert Mode
-	include( 'metabox-save/fields-expert.php' );
-	//Load CSS Code for File
-	include( 'metabox-save/getCSS.php' );
-	//Load JavaScript Code for File
-	include( 'metabox-save/getJavaScript.php' );
+	// Optional extra field handlers / generated CSS+JS. These files are not
+	// part of this repository; include them only when present so saving a
+	// post never fatals on a missing include or undefined cssfile()/jsfile().
+	$cssFile = '';
+	$jsFile  = '';
+	foreach ( [ 'fields-basic-setings.php', 'fields-formattings.php', 'fields-expert.php', 'getCSS.php', 'getJavaScript.php' ] as $extra ) {
+		$path = __DIR__ . '/metabox-save/' . $extra;
+		if ( file_exists( $path ) ) {
+			include $path;
+		}
+	}
+	if ( function_exists( 'cssfile' ) ) {
+		cssfile( $post_id, $cssFile );
+	}
+	if ( function_exists( 'jsfile' ) ) {
+		jsfile( $post_id, $jsFile );
+	}
 
-	cssfile( $post_id, $cssFile );
-	jsfile( $post_id, $jsFile );
-
-	update_post_meta( $post_id, '_arti_carousels_editor', ( $_arti_carousels ) );
+	update_post_meta( $post_id, '_arti_carousels_editor', $_arti_carousels );
 }
 
 // Output Metabox
